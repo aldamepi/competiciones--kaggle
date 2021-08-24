@@ -1,0 +1,523 @@
+---
+title: "competicion titanic kaggle"
+author: "Alberto Mengual"
+date: "7/28/2021"
+output: html_document
+---
+
+Por una parte tendré que hacer el __estudio descriptivo__ del dataset y por otro crear 
+el __modelo de clasificación.__
+
+##### ¿Cual es el objetivo del analisis descriptivo?
+Entender los datos antes de crear el modelo
+
+Estoy observando que hay varias variables que no me hacen falta para el analisis descriptivo: 
+
+  * el nombre
+  * el numero de ticket
+  * la cabina - cubierta
+  * la tarifa casi que la debería borrar
+
+Estaría bien cambiarle el nombre a las variables y traducirlas
+
+Creo que podría crear una columna que se llame familiares y sea la suma de las otras dos. - las dejo tal cual
+
+Tambien se podría trabajar con las __cubiertas__ (para analizar en que cubiertas se salvaron más hombres?)
+
+He agrupado las edades. Estaría bien crear tablas agrupadas de variables cualitativas: 
+
+* supervivientes, genero, clase - HECHO
+* supervivientes, genero, familiares
+
+¿Dónde se estudian las matrices de correlación?
+
+Se puede hacer un histograma agrupado??
+
+
+##### ¿Cuales son los pasos?¿Cuantas veces tengo que importar el dataset?
+Eliminar las variables que no son interesantes.
+
+Distinguir las variables cualitativas, ordinales y cuantitativas. Crear factores y factores ordenados.
+
+Hacer el analisis descriptivo: cualitativas, ordinales, cuantitativas, agrupadas, histograma.
+
+¿Que hago con los NA de las edades? ¿Los sustituyo por la media? ¿cuando? ¿antes de hacer los histogramas? quizas se podria hacer la copia de df y el tratamiento de los na antes de hacer el histograma.
+
+
+
+##### ¿Que tengo que considerar al crear el modelo de clasificación?
+Quiero crear varios modelos y compararlos
+
+Codificar como factor la variable de clasificación - HECHO
+
+¿Hay que separarla del conjunto?? No, en principio, porque ya lo tengo separado. Lo que tendría que hacer es aplicar los cambios en las variables al conjunto de test. 
+
+
+
+### IMPORTAR DATASETS
+Importar el data frame de la competición, en este caso el de titanic. Los conjuntos de entrenamiento y de test.
+
+```{r importarDatos}
+
+train = read.csv("../datasets/train.csv", row.names = 1)
+test = read.csv("../datasets/test.csv")
+
+              
+# Eliminar las columnas innecesarias del data frame
+df = train[,c(-3,-8,-10)]
+
+# Renombrar variables
+names(df) = c("Superviviente", "clase", "genero", "edad", "SibSp", "Parch", "Tarifa", "Puerto")
+
+# Codificar como factor la variable de clasificación
+df$Superviviente = factor(df$Superviviente, levels = c(0,1))
+
+
+# convertir las variables categoricas a factores:
+df$genero = factor(df$genero, labels = c("mujer","hombre"))
+df$clase = factor(df$clase, levels = c(3,2,1), ordered = TRUE)
+df$SibSp = factor(df$SibSp, ordered = TRUE)
+df$Parch = factor(df$Parch, levels = c(0,1,2,3,4,5,6,9),ordered = TRUE)
+
+# convertir las variables categoricas a factores en el cojunto de test:
+test$Sex = factor(test$Sex, labels = c(1,2))
+test$Pclass = factor(test$Pclass, levels = c(3,2,1), ordered = TRUE)
+test$SibSp = factor(test$SibSp, ordered = TRUE)
+test$Parch = factor(test$Parch, ordered = TRUE)
+
+```
+
+
+### INFORMACIÓN BÁSICA DEL DATASET Y CREACION DE FACTORES
+```{r infoB}
+
+head(df)
+str(df)
+summary(df)
+
+```
+
+
+### Variables cualitativas y ordinales * Diagramas de mosaico
+```{r mosaicos}
+cual.col = c()
+for (i in names(df)) {
+  if ("factor" %in% class(df[,i])){
+    cual.col = c(cual.col,i)
+  }
+}
+library(gmodels)
+
+for (i in cual.col) {
+  if (i != "Superviviente" & i!="div1") {
+    plot(table(df[,i],df[,"Superviviente"]), xlab = i, ylab = "Superviviente",
+         main = paste("Superviviente vs",i), col = c("indianred4","lightgreen"))
+    
+    CrossTable(df[,i],df[,"Superviviente"], prop.chisq = FALSE, dnn = c(i,"Superviviente"),
+               format = "SPSS")
+  }
+}
+
+
+```
+
+#### TABLAS MULTIDIMENSIONALES
+```{r mutlid}
+ftable(df$genero, df$clase, df$Superviviente)
+ftable(100*round(prop.table(table(df$genero, df$clase, df$Superviviente)),3))
+
+```
+
+
+
+
+### CONCLUSIONES DEL ANALISIS DESCRIPTIVO CUALITATIVO
+
+En relación a la clase, las personas de primera clase son las que más posibilidades tuvieron de sobrevivir. Aunque sobrevivieron más personas de tercera clase, que de segunda, en proporcion las de tercera eran las que menos probabilidades tuvieron de sobrevivir.
+
+La mayoría de los supervivientes fueron mujeres un 68% del total de supervivientes. Se rescató a un 75% del total de las mujeres del barco.
+¿Que porcentaje de mujeres de primera clase se rescato?
+
+La mayoría de los supervivientes viajaban sin pareja o hermanos. El hecho de tener uno o dos hermanos o una pareja aumentó las probabilidades de supervivencia.
+
+La mayoría de los supervivientes viajo sin padres o hijos. Viajar con los padres o con hasta 3 hijos aumentó las probabilidades de supervivencia.
+
+La mayoría de los supervivientes embarcarón en Southampton. Embarcar en cualquiera de los otros dos puertos aumentó las probabilidades de supervivencia siendo los de Cherbourg los que salieron mejor parados.
+
+
+### VARIABLES CUANTITATIVAS: LA EDAD
+```{r boxplotedad}
+
+boxplot(df$edad, col = "lightblue", notch = FALSE, main = "Edad")
+points(mean(df$edad), col = "gold", pch=19, cex = 1.5)
+summC = summary(df$edad)
+print("Tabla Resumen de Edad")
+print(summC)
+
+```
+
+
+```{r boxplotagrupado}
+
+boxplot(df$edad~df$Superviviente, col = "deepskyblue", 
+            main = "Edades de los Supervivientes", 
+            ylab = "Edades", xlab = "Superviviente")
+medias = aggregate(df$edad~df$Superviviente, FUN = mean)
+points(medias, col = "floralwhite", pch = 19)
+
+tSum = by(df$edad,df$Superviviente, FUN = summary)
+print(tSum)
+
+```
+
+
+```{r nIntervalos}
+e = df$edad
+# em = df$edad[df$genero == "mujer"]
+# eh = df$edad[,df$genero=="hombre"]
+n= length(e)
+k1 = ceiling(sqrt(n))
+print(k1)
+
+k2 = ceiling(1+log(n,2))
+print(k2)
+
+As = 3.5*sd(e)*n^(-1/3)
+k3 = ceiling(diff(range(e))/As)
+print(k3)
+
+Afd = 2*(quantile(e,0.75,names = FALSE, na.rm = TRUE)-quantile(e,0.25,names = FALSE, na.rm = TRUE))*n^(-1/3)
+k4 = ceiling(diff(range(e))/Afd)
+print(k4)
+
+k5 = nclass.Sturges(e)
+print(k5)
+
+#k6 = nclass.scott(e)
+#print(k6)
+
+#k7 = nclass.FD(e)
+#print(k7)
+```
+
+
+```{r}
+L = seq(0,80,5)
+df$div1 = cut(e, breaks = L, right = FALSE, include.lowest = TRUE)
+plot(table(df$div1,df[,"Superviviente"]), xlab = "Edades", ylab = "Superviviente",
+         main = "Superviviente vs Edades", col = c("indianred4","lightgreen"))
+    
+CrossTable(df$div1,df[,"Superviviente"], prop.chisq = FALSE, 
+               dnn = c("Edades","Superviviente"),format = "SPSS")
+
+
+plot(table(df$div1[df$genero=="mujer"],df$Superviviente[df$genero=="mujer"]), xlab = "Edades", ylab = "Superviviente",
+         main = "Superviviente vs Edades Mujeres", col = c("indianred4","lightgreen"))
+    
+CrossTable(df$div1[df$genero=="mujer"],df[,"Superviviente"][df$genero=="mujer"], 
+           prop.chisq = FALSE, 
+               dnn = c("Edades","Superviviente"),format = "SPSS")
+
+
+
+plot(table(df$div1[df$genero=="hombre"],df[,"Superviviente"][df$genero=="hombre"]), 
+     xlab = "Edades", ylab = "Superviviente",
+         main = "Superviviente vs Edades Hombres", col = c("indianred4","lightgreen"))
+    
+CrossTable(df$div1[df$genero=="hombre"],df[,"Superviviente"][df$genero=="hombre"], prop.chisq = FALSE, 
+               dnn = c("Edades","Superviviente"),format = "SPSS")
+
+```
+
+
+
+```{r histograma}
+L = seq(0,80,5)
+h = hist(df$edad, breaks = L, right = FALSE, 
+         freq = FALSE, 
+     main = "Histograma de la Edad", xlab = "Edades", ylab = "Frecuencias Absolutas",
+#     ylim = c(0,120),
+     xaxt = "n", 
+     yaxt = "n", 
+      col = "lightgray")
+axis(1, at=L)
+text(h$mids, h$density/2, labels=h$counts, col="purple")
+# lines(density(df$edad), col ="purple", lwd = 2)
+rug(jitter(df$edad))
+
+```
+
+
+### CONCLUSIONES DEL ANALISIS DESCRIPTIVO CUALITATIVO
+No parece que la edad hubiera sido un criterio significativo para seleccionar a los supervivientes. Excepto en el caso de los varones menores de 10 años que tuvieron una mayor probabilidad de supervivencia que el resto de los varones en general.
+
+
+
+## CREACION DEL MODELO PREDICTIVO
+
+### PREPROCESADO DE DATOS
+
+Tratamiento de los NA
+
+codificar las variables categoricas
+
+dividir los datos en entrenamiento y test - Aunque parezca que esta hecho, no lo está. El conjunto de test actual es para enviar los resultados. Si quiero comprobar mi propia matriz de confusión tendré que hacer la división de los conjuntos de test y entrenamiento.
+
+¿Se puede hacer el crossvalidation en R? Si
+
+Seleccionar las variables, crear copia de test
+
+escalar los valores
+
+crear modelo de clasificación
+
+#### Tratamiento de los valores NA
+
+
+Sustiruir los na de la variable edad por la media. Una alternativa sería crear edades __aleatorias.__
+
+```{r nas}
+dataset = df
+
+df$edad = ifelse(is.na(df$edad),
+                   ave(df$edad,FUN = function(x) mean(x,na.rm=T)),
+                   df$edad)
+
+# solucionar los NAs del conjunto de test
+test$Age = ifelse(is.na(test$Age),
+                   ave(test$Age,FUN = function(x) mean(x,na.rm=T)),
+                   test$Age)
+
+```
+
+
+#### CODIFICAR LAS VARIABLES CATEGORICAS
+
+Cambiar las etiquetas de la varible genero. Quitar los factores para las RNA.
+```{r codificarFactores}
+df$genero = as.numeric(factor(df$genero, labels = c(1,2)))
+df$Puerto = as.numeric(factor(df$Puerto, labels = c(1,2,3,4)))
+df$clase = as.numeric(factor(df$clase, levels = c(3,2,1), labels = c(3,2,1)))
+df$SibSp = as.numeric(levels(df$SibSp)[as.integer(df$SibSp)])
+df$Parch = as.numeric(levels(df$Parch)[as.integer(df$Parch)])
+
+# Codificar factores del cojunto de test
+test$Sex = as.numeric(factor(test$Sex, labels = c(1,2)))
+test$Embarked = factor(test$Embarked, labels = c(2,3,4))
+levels(test$Embarked) = c(2,3,4,1)
+test$Embarked = as.numeric(levels(test$Embarked)[as.integer(test$Embarked)])
+test$Pclass = as.numeric(factor(test$Pclass, levels = c(3,2,1), labels = c(3,2,1)))
+test$SibSp = as.numeric(levels(test$SibSp)[as.integer(test$SibSp)])
+test$Parch = as.numeric(levels(test$Parch)[as.integer(test$Parch)])
+
+```
+
+
+#### DIVIDIR LOS DATOS EN ENTRENAMIENTO Y TEST - ELECCION DE VARIABLES
+
+
+Voy a aplicar el K-fold Cross Validation así que no voy a dividir en entrenamiento y test todavía. Pero si voy a elegir las variables con las que voy a trabajar.
+```{r eleccionVariables}
+# A df la voy a quitar la tarifa y las edades agrupadas
+df2 = df[,c(-7,-9)]
+# Al test le voy a quitar: PassengerId, Name, Ticket, Fare, Cabin
+test2 = test[,c(-1,-3,-8,-9,-10)]
+
+```
+
+
+#### ESCALADO DE VALORES
+
+No estoy seguro si tengo que escalar los factores. Los factores no se escalan en R. Son strings. En general las variables dummies no hay que escalarlas directamente.
+
+Tampoco estoy seguro si hay que escalarlos para todos los modelos. Solo para los modelos que utilizan distancias euclideas. ¿Para los bosques aleatorios?
+
+Después de codificar las variables, ¿Serían interesante escalar sus valores tambien? 
+```{r escaladdo}
+#df2$edad = scale(df2$edad)
+
+# Escalo también el conjunto de test para enviar los datos
+#test2$Age = scale(test2$Age)
+
+```
+
+
+### APLICAR EL ALGORITMO K-FOLD CROSS VALIDATION
+
+apicar tambien el grid search
+
+aplicar varios modelos:
+
+* random forest
+* k-nearest neighbours (escalar)
+* Support Vector Machine (escalar? - repasar)
+* muestreo de thompson
+* xgboost - no necesita escalar
+* deep learning?
+
+estudiar la grid search en r
+crear una funcion, para kfold, que haga el MAE
+
+```{r kfoldGenerico, include=FALSE, eval=FALSE}
+
+library(caret)
+folds = createFolds(df2$Superviviente, k = 10)
+cv = lapply(folds, function(x) { 
+      training_fold = df2[-x, ]
+      test_fold = df2[x, ]
+      classifier =
+      y_pred = predict(classifier, newdata = test_fold[,-1])
+      cm = table(test_fold[, 1], y_pred)
+      accuracy = (cm[1,1]+cm[2,2])/(cm[1,1]+cm[1,2]+cm[2,1]+cm[2,2])
+      return(accuracy)  
+})
+
+accuracy = mean(as.numeric(cv))
+accuracy_sd = sd(as.numeric(cv))
+
+# classifier = train(form = Purchased ~ .,
+#                    data = training_set, method = 'svmRadial')
+# classifier
+# classifier$bestTune
+```
+
+
+#### MODELO RANDOM FOREST EN KFOLD
+
+OJO: La variable cv devuelve un vector con las predicciones por lo que __no__ se puede obtener un modelo de clasificacion dentro del kfold. Será necesario crearlo a parte para poder hacer la predicción y obtener los parametros optimos.
+
+¿Es posible que la función create folds produzca overfitting? Las preciones son mucho mas altas que con el modelo creado con train.
+```{r kfoldRandomForest}
+
+library(caret)
+library(randomForest)
+folds = createFolds(df2$Superviviente, k = 10)
+cv_rf = lapply(folds, function(x) { 
+      training_fold = df2[-x, ]
+      test_fold = df2[x, ]
+#      classifier = train(form = Superviviente ~ .,
+#                         data = df2, method = 'rf')
+      classifier = randomForest(x = df2[,-1],
+                          y = df2$Superviviente,
+                          mtry = 11)
+      y_pred = predict(classifier, newdata = test_fold[,-1])
+      cm = table(test_fold[, 1], y_pred)
+      accuracy = (cm[1,1]+cm[2,2])/(cm[1,1]+cm[1,2]+cm[2,1]+cm[2,2])
+      return(accuracy)  
+})
+
+acc_rf = mean(as.numeric(cv_rf))
+acc_sd_rf = sd(as.numeric(cv_rf))
+
+# 0.9360285
+# 0.0275173
+
+#classifier = train(form = Superviviente ~ .,
+#                         data = df2, method = 'rf')
+# classifier
+# classifier$bestTune
+# 0.7995339
+
+```
+
+
+#### MODELO XGBOOST
+
+```{r kfoldXGboost}
+library(xgboost)
+library(plyr)
+
+folds = createFolds(df2$Superviviente, k = 10)
+cv_xg = lapply(folds, function(x) { 
+      training_fold = df2[-x, ]
+      test_fold = df2[x, ]
+      classifier = xgboost(data = as.matrix(df2[,-1]), label = df2$Superviviente,
+                           nrounds = 50, max_depth = 2, eta = 0.3,
+                           gamma = 0, colsample_bytree = 0.8, min_child_weight = 1,
+                           subsample = 0.75)
+      y_pred = predict(classifier, newdata = as.matrix(test_fold[,-1]))
+      cm = table(test_fold[, 1], y_pred)
+      accuracy = (cm[1,1]+cm[2,2])/(cm[1,1]+cm[1,2]+cm[2,1]+cm[2,2])
+      return(accuracy)  
+})
+
+acc_xg = mean(as.numeric(cv_xg))
+acc_sd_xg = sd(as.numeric(cv_xg))
+# 0.475
+# 0.2080554
+
+classi_xg = train(form = Superviviente ~.,
+                  data = df2, method = 'xgbTree')
+# 0.8155631
+
+#classifier = xgboost(data = as.matrix(training_set[, -11]),
+#                     label = training_set$Exited, 
+#                     nrounds = 10)
+#classi_xg
+#classi_xg$bestTune
+```
+
+
+
+### Predicción de los resultados con el conjunto de testing usando Grid Search (train)
+
+OJO: Al hacer el modelo de clasificacion dentro del grid search, creado con la función caret::train, solo se modifican los valores permitidos por dicha función (ver link). Además al introducir los parametros obtenidos con train en kfold genera warnings.
+
+
+#### Prediccion con Random Forest
+```{r prediccionRF}
+library(randomForest)
+classi_rf = train(form = Superviviente ~ ., 
+                  data = df2, method = 'rf',
+                  importance = TRUE)
+
+names(test2) = c("clase", "genero", "edad", "SibSp", "Parch", "Puerto")
+# test2$Puerto = factor(test2$Puerto, levels = c(4,3,2,1), labels = c(4,3,2,1))
+y_pred_rf = predict(classi_rf, newdata = test2)
+
+```
+
+
+#### Prediccion con XGBoost
+
+```{r}
+library(xgboost)
+library(plyr)
+
+#classi_rf = train(form = Superviviente ~ ., 
+#                  data = df2, method = 'xgbtree')
+
+names(test2) = c("clase", "genero", "edad", "SibSp", "Parch", "Puerto")
+# test2$Puerto = factor(test2$Puerto, levels = c(4,3,2,1), labels = c(4,3,2,1))
+y_pred_xg = predict(classi_xg, newdata = test2)
+```
+
+
+
+
+## CREAR EL ENVIO DE RESULTADOS
+Comparar las distintas 
+Crear un fichero csv para enviar a kaggle
+
+### Output Random Forest
+```{r outputRF}
+# Pasar de factor a vector:
+out_vect_rf = as.numeric(levels(y_pred_rf)[as.integer(y_pred_rf)])
+# Crear el dataframe
+out_rf = cbind("PassengerId"= test$PassengerId,
+               data.frame("Survived"= out_vect_rf))
+# write.csv(out_rf, "../datasets/subm_am_rf_300721.csv", row.names = FALSE)
+```
+
+### Output XGBoost
+```{r outputXGboost}
+# Pasar de factor a vector:
+out_vect_xg = as.numeric(levels(y_pred_xg)[as.integer(y_pred_xg)])
+# Crear el dataframe
+out_xg = cbind("PassengerId"= test$PassengerId,
+               data.frame("Survived"= out_vect_xg))
+# write.csv(out_xg, "../datasets/subm_am_xg_300721.csv", row.names = FALSE)
+```
+
+
+
